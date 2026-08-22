@@ -16,7 +16,7 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
   const canEdit = can(membership.role, "contacts.edit");
   const canDelete = can(membership.role, "contacts.delete");
 
-  const boundCreate = createContact.bind(null, tenant.slug);
+   async function handleCreate(formData: FormData) { "use server"; await createContact(tenant.slug, formData); } async function handleDelete(contactId: string, formData: FormData) { "use server"; await deleteContact(tenant.slug, contactId); }
 
   return (
     <div>
@@ -47,7 +47,7 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
                     <td className="px-5 py-3 font-mono text-ink-soft">{c._count.deals}</td>
                     {canDelete && (
                       <td className="px-5 py-3 text-right">
-                        <form action={deleteContact.bind(null, tenant.slug, c.id)}>
+                       <form action={handleDelete.bind(null, c.id)}>
                           <button className="text-xs text-ink-soft hover:text-red-600">
                             Delete
                           </button>
@@ -71,7 +71,7 @@ export default async function ContactsPage({ params }: { params: { tenant: strin
         {canEdit && (
           <div className="h-fit rounded-lg border border-hairline bg-white p-6">
             <h2 className="font-display font-bold text-ink">Add a contact</h2>
-            <form action={boundCreate} className="mt-4 space-y-3">
+            <form action={handleCreate}  className="mt-4 space-y-3">
               <input
                 name="name"
                 required
