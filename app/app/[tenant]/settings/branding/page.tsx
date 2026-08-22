@@ -10,8 +10,7 @@ export default async function BrandingSettingsPage({ params }: { params: { tenan
   const canManage = can(membership.role, "branding.manage");
   const unlocked = requiresPlanFeature(tenant, "customBranding");
 
-  const boundUpdate = updateBranding.bind(null, tenant.slug);
-
+  async function handleUpdate(formData: FormData) { "use server"; await updateBranding(tenant.slug, formData); }
   return (
     <div>
       <PageHeader title="Branding" description="Make the workspace feel like yours." />
@@ -28,7 +27,7 @@ export default async function BrandingSettingsPage({ params }: { params: { tenan
             </Link>
           </div>
         ) : (
-          <form action={boundUpdate} className="max-w-md space-y-4 rounded-lg border border-hairline bg-white p-6">
+          <form action={handleUpdate} className="max-w-md space-y-4 rounded-lg border border-hairline bg-white p-6">
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-ink">Display name</span>
               <input
