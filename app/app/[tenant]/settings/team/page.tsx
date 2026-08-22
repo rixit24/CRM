@@ -21,6 +21,7 @@ export default async function TeamSettingsPage({ params }: { params: { tenant: s
   const canManage = can(membership.role, "team.manage");
   const canRemove = can(membership.role, "team.remove");
   const seatLimit = PLANS[tenant.plan as PlanId].limits.seats;
+  async function handleRemove(membershipId: string) { "use server"; await removeMember(tenant.slug, membershipId); }
 
   async function invite(formData: FormData) {
     "use server";
@@ -78,7 +79,7 @@ export default async function TeamSettingsPage({ params }: { params: { tenant: s
                   {canRemove && (
                     <td className="px-5 py-3 text-right">
                       {m.role !== "OWNER" && (
-                        <form action={removeMember.bind(null, tenant.slug, m.id)}>
+                        <form action={handleRemove.bind(null, m.id)}>
                           <button className="text-xs text-ink-soft hover:text-red-600">Remove</button>
                         </form>
                       )}
