@@ -1,0 +1,197 @@
+// Prisma schema for the multi-tenant CRM.
+// Dev uses SQLite for zero-config local running.
+// For production, switch provider to "postgresql" and set DATABASE_URL
+// to a Postgres connection string (Supabase, Neon, RDS, etc.) — the
+// schema itself needs no changes.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NOTE: SQLite has no native enum type, so plan/role/status/type fields
+// below are plain Strings constrained at the application layer instead
+// (see lib/plans.ts for PlanId, lib/rbac.ts for Role). If you switch the
+// datasource to "postgresql" for production, you can optionally convert
+// these back to real Prisma enums — not required, just an option.
+
+// A Tenant is one customer company/workspace. Every piece of CRM data
+// belongs to exactly one Tenant — this is the isolation boundary.
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  // Billing (Stripe)
+  plan                   String    @default("FREE") // "FREE" | "PRO" | "ENTERPRISE" — see lib/plans.ts
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  stripePriceId          String?
+  stripeCurrentPeriodEnd DateTime?
+  subscriptionStatus     String? // active, trialing, past_due, canceled, incomplete
+
+  // Branding (Pro+ feature)
+  logoUrl      String?
+  primaryColor String? @default("#4F46E5")
+  companyName  String? // shown instead of tenant name on branded views
+
+  // Relations
+  memberships     Membership[]
+  contacts        Contact[]
+  deals           Deal[]
+  pipelineStages  PipelineStage[]
+  activities      Activity[]
+  apiKeys         ApiKey[]
+  invites         Invite[]
+
+  suspended Boolean @default(false)
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  isSuperAdmin Boolean  @default(false) // platform-level admin (you), not tenant role
+  createdAt    DateTime @default(now())
+
+  memberships Membership[]
+  activities  Activity[]
+  dealsOwned  Deal[]    @relation("DealOwner")
+  contactsOwned Contact[] @relation("ContactOwner")
+}
+
+// Join table: a User can belong to multiple Tenants with different roles.
+model Membership {
+  id       String @id @default(cuid())
+  role     String @default("MEMBER") // "OWNER" | "ADMIN" | "MEMBER" — see lib/rbac.ts
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, tenantId])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  notes     String?
+
+  ownerId   String?
+  owner     User?    @relation("ContactOwner", fields: [ownerId], references: [id])
+
+  deals      Deal[]
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model PipelineStage {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name     String
+  order    Int
+  color    String @default("#6366F1")
+
+  deals Deal[]
+
+  @@index([tenantId])
+}
+
+model Deal {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title     String
+  value     Float      @default(0)
+  status    String     @default("OPEN") // "OPEN" | "WON" | "LOST"
+  closeDate DateTime?
+
+  contactId String?
+  contact   Contact?   @relation(fields: [contactId], references: [id])
+
+  stageId   String
+  stage     PipelineStage @relation(fields: [stageId], references: [id])
+
+  ownerId   String?
+  owner     User?      @relation("DealOwner", fields: [ownerId], references: [id])
+
+  activities Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Activity {
+  id       String       @id @default(cuid())
+  tenantId String
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  type     String       @default("NOTE") // "NOTE" | "CALL" | "EMAIL" | "MEETING"
+  content  String
+
+  dealId    String?
+  deal      Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  userId   String?
+  user     User?    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// API keys for the API access feature (Pro/Enterprise only, enforced in app code).
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name       String
+  key        String    @unique // stored hashed in production; see lib/apikeys.ts
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revoked    Boolean   @default(false)
+
+  @@index([tenantId])
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  email     String
+  role      String   @default("MEMBER") // "OWNER" | "ADMIN" | "MEMBER"
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
