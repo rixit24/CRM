@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
+ import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Field, TextInput, ErrorText } from "@/components/ui/Form";
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
   const plan = params.get("plan");
-
   const [form, setForm] = useState({ name: "", email: "", password: "", companyName: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
