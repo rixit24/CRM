@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantMembership } from "@/lib/tenant";
 import { can } from "@/lib/rbac";
 import { requiresPlanFeature } from "@/lib/limits";
-import { generateApiKey } from "@/lib/apikeys";
+import { generateApiKey, hashApiKey } from "@/lib/apikeys";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -41,7 +41,7 @@ export async function createApiKey(
 
   const key = generateApiKey();
   await prisma.apiKey.create({
-    data: { tenantId: tenant.id, name: name.trim() || "Untitled key", key },
+    data: { tenantId: tenant.id, name: name.trim() || "Untitled key", key: hashApiKey(key) },
   });
 
   revalidatePath(`/app/${tenantSlug}/settings/api`);
